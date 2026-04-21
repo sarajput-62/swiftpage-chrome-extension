@@ -4,9 +4,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const recOutput = document.getElementById("rec-output");
   const overlay = document.getElementById("onboarding-overlay");
 
-  // --- SWIFTPAGE IDENTITY CHECK ---
-  let userRealName = localStorage.getItem('swiftpage_user_name');
-  let userRealEmail = localStorage.getItem('swiftpage_user_email');
+  // --- UPDATED: SECURE IDENTITY CHECK ---
+  const storedData = await chrome.storage.local.get(['swiftpage_user_name', 'swiftpage_user_email']);
+  let userRealName = storedData.swiftpage_user_name;
+  let userRealEmail = storedData.swiftpage_user_email;
 
   if (!userRealName || !userRealEmail) {
     overlay.style.display = "flex";
@@ -17,23 +18,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     const emailInput = document.getElementById("user-email-input").value.trim();
     
     if (nameInput && emailInput) {
-      localStorage.setItem('swiftpage_user_name', nameInput);
-      localStorage.setItem('swiftpage_user_email', emailInput);
-      userRealName = nameInput;
-      userRealEmail = emailInput;
+      // --- UPDATED: SECURE STORAGE SET ---
+      chrome.storage.local.set({
+        'swiftpage_user_name': nameInput,
+        'swiftpage_user_email': emailInput
+      }, () => {
+        userRealName = nameInput;
+        userRealEmail = emailInput;
 
-      // --- SIGNUP TRACKING LOG ---
-      logToGoogleSheet("Signup", "New User Registration", "N/A", "0");
+        // --- SIGNUP TRACKING LOG ---
+        logToGoogleSheet("Signup", "New User Registration", "N/A", "0");
 
-      overlay.style.display = "none";
-      runAnalysis(); 
+        overlay.style.display = "none";
+        runAnalysis(); 
+      });
     } else {
       alert("Please fill in both fields to activate SwiftPage.");
     }
   };
 
   // --- SWIFTPAGE ANALYTICS TRACKING ---
-  // Added companyId parameter
   async function logToGoogleSheet(action, title, company = "-", followers = "0", companyId = "N/A") { 
     if (!userRealName || !userRealEmail) return;
 
@@ -48,7 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const entryFollowers = "entry.1673480008";
     const entryEmail = "entry.546733564"; 
     const entryCaseId = "entry.773810217"; 
-    const entryCompanyId = "entry.483809784"; // NEW: Dedicated Company ID field
+    const entryCompanyId = "entry.483809784"; 
 
     const url = `https://docs.google.com/forms/d/e/${formID}/formResponse?` + 
                 `${entryAction}=${encodeURIComponent(action)}&` + 
@@ -58,7 +62,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `${entryFollowers}=${encodeURIComponent(followers)}&` + 
                 `${entryEmail}=${encodeURIComponent(userRealEmail)}&` + 
                 `${entryCaseId}=${encodeURIComponent(caseIdValue)}&` + 
-                `${entryCompanyId}=${encodeURIComponent(companyId)}&` + // Sending Company ID separately
+                `${entryCompanyId}=${encodeURIComponent(companyId)}&` + 
                 `submit=Submit`; 
 
     fetch(url, { mode: 'no-cors' }); 
@@ -87,7 +91,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (res.recommendation) { 
         const mainTitle = Array.isArray(res.recommendation) ? res.recommendation[0] : res.recommendation;
-        // Pass res.companyId to tracking function
         logToGoogleSheet("View", mainTitle, res.pageName, res.followers, res.companyId); 
       } 
 
@@ -132,7 +135,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         copyBtn.onclick = () => { 
           navigator.clipboard.writeText(text).then(() => { 
-            // Pass res.companyId to tracking function
             logToGoogleSheet("Copy", blockTitle, res.pageName, res.followers, res.companyId); 
             const originalText = copyBtn.innerText; 
             copyBtn.innerText = "✓ Copied!"; 
